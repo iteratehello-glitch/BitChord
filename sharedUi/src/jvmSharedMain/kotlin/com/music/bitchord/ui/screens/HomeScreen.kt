@@ -7,6 +7,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.DrawableResource
 import androidx.compose.foundation.Image
 import org.jetbrains.compose.resources.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -174,7 +175,7 @@ fun HomeScreen(
     ) {
         LazyColumn(
             state = activeListState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag("home_feed"),
             // The heading sits higher than the other tabs' first row: pull the
             // whole feed up by [HOME_TITLE_LIFT] with it.
             contentPadding = if (title != null) {
@@ -190,7 +191,7 @@ fun HomeScreen(
                 item(key = "home_heading") {
                     if (personalized) Text(
                         text = title,
-                        style = MaterialTheme.typography.displaySmall,
+                        style = MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp).semantics { heading() },
                     ) else HomeTitle(title)

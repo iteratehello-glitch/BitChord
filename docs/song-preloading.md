@@ -13,8 +13,8 @@ Open the Android app's **Settings → Playback → Song loader**:
   This is the default.
 - **Preload 3 songs:** loads up to the next three queue entries, one at a time.
 
-Preloading begins after an eight-second grace period so the current song can
-buffer first. Changing the setting takes effect immediately and is saved across
+Preloading begins after a configurable delay from 0 to 30 seconds (default 7)
+so the current song can buffer first. Set 0 for instant loading. Changing the setting takes effect immediately and is saved across
 app restarts. Pause, stop, repeat-one, queue changes and skipping cancel outdated
 background work. Repeat-all wraparound follows the player's next-item order.
 
@@ -46,7 +46,7 @@ Alternatively, apply `BitChord-song-loader.patch` from the repository root with
 `git apply BitChord-song-loader.patch`. Use either the ZIP or patch, not both.
 
 The full-source ZIP is a separate complete source snapshot with these changes,
-without Git history or build outputs. No changes have been pushed to GitHub.
+without Git history or build outputs. The current implementation is on the `feature/home-customization` branch.
 
 ## Build and verification
 

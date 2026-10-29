@@ -3076,7 +3076,7 @@ private fun BitChordApp(
                                 controlSurface = { modifier ->
                                     modifier.lightweightLiquidGlass(
                                         shape = androidx.compose.foundation.shape.CircleShape,
-                                        fallbackColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        fallbackColor = MaterialTheme.colorScheme.surface,
                                     )
                                 },
                                 signedIn = signedIn,

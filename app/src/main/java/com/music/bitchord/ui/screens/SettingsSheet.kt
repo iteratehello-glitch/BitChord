@@ -2351,8 +2351,8 @@ private fun SongPreloadSheet(selected: SongPreloadMode, onSelect: (SongPreloadMo
                 modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
             )
             Text(
-                if (delaySeconds.toInt() == 0) stringResource(R.string.song_preload_instant)
-                else stringResource(R.string.song_preload_seconds, delaySeconds.toInt()),
+                if (kotlin.math.round(delaySeconds).toInt() == 0) stringResource(R.string.song_preload_instant)
+                else stringResource(R.string.song_preload_seconds, kotlin.math.round(delaySeconds).toInt()),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
             )

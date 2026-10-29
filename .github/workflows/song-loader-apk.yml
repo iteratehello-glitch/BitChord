@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: bitchord-home-preview-signing-v1
+          key: bitchord-home-preview-signing-v2
       - name: Create preview signing key if needed
         run: |
           mkdir -p ~/.android
@@ -42,12 +42,18 @@ jobs:
       - name: Test home and preload policies
         run: ./gradlew :app:testDevDebugUnitTest --tests 'com.music.bitchord.PreloadPolicyTest' --tests 'com.music.bitchord.HomeLayoutTest' -PhomePreview=true --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
       - name: Build installable development APK
-        run: ./gradlew :app:assembleDevDebug -PhomePreview=true --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
+        run: ./gradlew :app:assembleDevDebug :app:assembleDevDebugAndroidTest -PhomePreview=true --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BitChord-Home-APK
           path: app/build/outputs/apk/dev/debug/*universal*.apk
+          if-no-files-found: error
+      - name: Upload UI test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-ui-test-apk
+          path: app/build/outputs/apk/androidTest/dev/debug/*.apk
           if-no-files-found: error
       - name: Upload test reports
         if: always()
@@ -56,3 +62,44 @@ jobs:
           name: home-test-reports
           path: app/build/reports/tests/testDevDebugUnitTest/
           if-no-files-found: ignore
+
+  ui-smoke:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BitChord-Home-APK
+          path: apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: home-ui-test-apk
+          path: tests
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Home UI smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb install apk/*.apk
+            adb install tests/*.apk
+            adb shell am instrument -w -r -e class com.music.bitchord.HomeCustomizationUiTest com.dev.bitchord.home.test/androidx.test.runner.AndroidJUnitRunner | tee ui-results.txt
+            adb pull /sdcard/Android/data/com.dev.bitchord.home/files/home-ui screenshots
+            grep -q 'OK (2 tests)' ui-results.txt
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-ui-screenshots
+          path: |
+            screenshots/
+            ui-results.txt

@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -41,7 +42,7 @@ fun HomeCustomizationSheet(
                 Text(stringResource(R.string.home_customize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) }
             }
-            LazyColumn(contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 24.dp)) {
+            LazyColumn(modifier = Modifier.testTag("home_customization"), contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 24.dp)) {
                 item {
                     Text(
                         stringResource(R.string.home_customize_description),
