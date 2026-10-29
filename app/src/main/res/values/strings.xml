@@ -19,6 +19,12 @@
     <string name="close">Close</string>
     <string name="back">Back</string>
     <string name="settings">Settings</string>
+    <string name="song_preload_title">Song loader</string>
+    <string name="song_preload_subtitle">Choose how many upcoming songs to load in advance</string>
+    <string name="song_preload_after_current">After this song ends</string>
+    <string name="song_preload_one">Preload 1 song</string>
+    <string name="song_preload_three">Preload 3 songs</string>
+    <string name="song_preload_explanation">Preloading starts 8 seconds after playback begins and uses your streaming quality settings, including lossless when available. Songs load one at a time and use your song cache and mobile data when connected. After this song ends turns off background preloading; normal gapless, Crossfade and Automix buffering may still happen.</string>
     <string name="search">Search</string>
     <string name="clear_search">Clear search</string>
     <string name="library">Library</string>

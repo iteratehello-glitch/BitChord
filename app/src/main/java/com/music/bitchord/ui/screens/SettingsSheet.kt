@@ -156,6 +156,9 @@ import com.music.bitchord.R
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.DownloadQuality
+import com.music.bitchord.data.settings.SongPreloadMode
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.data.stats.Backup
 import com.music.bitchord.playback.AudioCache
@@ -200,6 +203,7 @@ fun SettingsScreen(
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
     val crossfade by AppSettings.crossfadeSeconds.collectAsStateWithLifecycle()
+    val songPreloadMode by AppSettings.songPreloadMode.collectAsStateWithLifecycle()
     val smartFade by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val automixPerformance by AppSettings.automixPerformanceMode.collectAsStateWithLifecycle()
     val skipSilence by AppSettings.skipSilence.collectAsStateWithLifecycle()
@@ -289,6 +293,7 @@ fun SettingsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var picking by remember { mutableStateOf<QualityTarget?>(null) }
     var pickingDownloadQuality by remember { mutableStateOf(false) }
+    var pickingSongPreload by remember { mutableStateOf(false) }
     var pickingAutomixPerformance by remember { mutableStateOf(false) }
     // What the last export or import did, shown on the row that did it rather
     // than as a toast: a backup is the one action here whose outcome nobody can
@@ -555,6 +560,16 @@ fun SettingsScreen(
         }
 
         SearchableSettingsGroup(search, header = stringResource(R.string.playback)) {
+            val preloadTitle = stringResource(R.string.song_preload_title)
+            row(preloadTitle, "loader", "preload", "loading", "buffer", "lossless") {
+                SettingsRow(
+                    icon = Icons.Rounded.Download,
+                    title = preloadTitle,
+                    subtitle = stringResource(R.string.song_preload_subtitle),
+                    value = songPreloadMode.localizedLabel(),
+                    onClick = { pickingSongPreload = true },
+                )
+            }
             val preferMusicOnlyTitle = stringResource(R.string.prefer_music_only)
             row(preferMusicOnlyTitle, "video", "audio", "music video") {
                 SettingsRow(
@@ -1625,6 +1640,21 @@ fun SettingsScreen(
         }
     }
 
+    if (pickingSongPreload) {
+        ModalBottomSheet(
+            onDismissRequest = { pickingSongPreload = false },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            SongPreloadSheet(
+                selected = songPreloadMode,
+                onSelect = {
+                    AppSettings.setSongPreloadMode(it)
+                    pickingSongPreload = false
+                },
+            )
+        }
+    }
+
     if (pickingDownloadQuality) {
         ModalBottomSheet(
             onDismissRequest = { pickingDownloadQuality = false },
@@ -2268,6 +2298,45 @@ private fun DownloadQualitySheet(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SongPreloadMode.localizedLabel(): String = stringResource(
+    when (this) {
+        SongPreloadMode.AFTER_CURRENT -> R.string.song_preload_after_current
+        SongPreloadMode.ONE -> R.string.song_preload_one
+        SongPreloadMode.THREE -> R.string.song_preload_three
+    },
+)
+
+@Composable
+private fun SongPreloadSheet(selected: SongPreloadMode, onSelect: (SongPreloadMode) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+        Text(
+            text = stringResource(R.string.song_preload_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+        )
+        Text(
+            text = stringResource(R.string.song_preload_explanation),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 16.dp),
+        )
+        SongPreloadMode.entries.forEach { mode ->
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .selectable(selected = mode == selected, onClick = { onSelect(mode) }, role = Role.RadioButton)
+                    .padding(horizontal = 22.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(mode.localizedLabel(), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                if (mode == selected) {
+                    Icon(Icons.Rounded.Check, contentDescription = stringResource(R.string.selected), tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }

@@ -220,6 +220,7 @@ object AppSettings {
     // which now reads [effectiveAudioQuality] and nothing else.
 
     val crossfadeSeconds = MutableStateFlow(0)
+    val songPreloadMode = MutableStateFlow(SongPreloadMode.ONE)
 
     /**
      * Lets Automix's analyzer decide the transition's timing and length
@@ -817,6 +818,7 @@ object AppSettings {
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
+        songPreloadMode.value = SongPreloadMode.fromStoredName(prefs.getString(KEY_SONG_PRELOAD, null))
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -1109,6 +1111,11 @@ object AppSettings {
     fun setCrossfadeSeconds(value: Int) {
         crossfadeSeconds.value = value
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
+    }
+
+    fun setSongPreloadMode(value: SongPreloadMode) {
+        songPreloadMode.value = value
+        prefs.edit().putString(KEY_SONG_PRELOAD, value.name).apply()
     }
 
     fun setSmartFadeEnabled(value: Boolean) {
@@ -1994,6 +2001,7 @@ object AppSettings {
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
+    private const val KEY_SONG_PRELOAD = "song_preload_mode"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"

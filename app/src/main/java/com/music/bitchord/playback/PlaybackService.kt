@@ -152,6 +152,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collect
@@ -1088,7 +1089,10 @@ class PlaybackService : MediaLibraryService() {
             speakers.onLocalRepeatChanged(repeatMode)
             player?.let { WearBridge.republish(this@PlaybackService, it) }
             // Repeat-one makes the "next" track this one again.
-            player?.let { activeLoudness().nextMediaId = nextMediaIdOf(it) }
+            player?.let {
+                activeLoudness().nextMediaId = nextMediaIdOf(it)
+                if (it.isPlaying) prefetchAround(it)
+            }
             // Repeat-all loops the queue as it stands; AutoPlay's tracks are the
             // opposite of that — an endless supply of new ones — so they come
             // back out first, and native REPEAT_MODE_ALL then wraps a plain
@@ -1368,7 +1372,8 @@ class PlaybackService : MediaLibraryService() {
             if (dataSpec.uri.authority == "source") {
                 val directYouTube =
                     dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1"
-                val stream = runBlocking(about) {
+                val sourceChoiceKey = AudioCache.cacheKeyOf(dataSpec.uri)
+                val stream = (if (directYouTube) null else StreamChoice.of(sourceChoiceKey)) ?: runBlocking(about) {
                     withTimeout(RESOLVE_TIMEOUT_MS) {
                         if (directYouTube) {
                             SourceResolver.youtubeFallback(SourceResolver.targetIn(dataSpec.uri))
@@ -1376,7 +1381,8 @@ class PlaybackService : MediaLibraryService() {
                             SourceResolver.resolve(dataSpec.uri)
                         }
                     }
-                } ?: throw java.io.IOException(
+                }?.also { StreamChoice.remember(sourceChoiceKey, it, substituted = false) }
+                    ?: throw java.io.IOException(
                     if (directYouTube) {
                         "No YouTube audio fallback matched ${dataSpec.uri.getQueryParameter("n")}"
                     } else {
@@ -5983,49 +5989,64 @@ class PlaybackService : MediaLibraryService() {
                         if (index in 0 until exoPlayer.mediaItemCount) add(exoPlayer.getMediaItemAt(index).mediaId)
                     }
                 }
+                preloadQueueIndices(
+                    currentIndex = current,
+                    itemCount = exoPlayer.mediaItemCount,
+                    songCount = AppSettings.songPreloadMode.value.songCount,
+                    repeatOne = exoPlayer.repeatMode == Player.REPEAT_MODE_ONE,
+                ) { index ->
+                    exoPlayer.currentTimeline.getNextWindowIndex(
+                        index, exoPlayer.repeatMode, exoPlayer.shuffleModeEnabled,
+                    )
+                }.forEach { add(exoPlayer.getMediaItemAt(it).mediaId) }
                 spare?.currentMediaItem?.mediaId?.let(::add)
             }
             AudioCache.dropForeignEntries(keep)
         }
     }
 
-    /**
-     * Hands the cache the queue ahead of the one playing: [AudioCache.QUEUE_DEPTH]
-     * tracks is more than it does anything with, but it decides that, not this.
-     */
+    /** Gather the selected number in actual playback order, including repeat-all wraparound. */
     private fun prefetchAround(player: ExoPlayer) {
-        val nextIndex = player.nextMediaItemIndex
-        val upcomingSongs = if (nextIndex != C.INDEX_UNSET) {
-            val end = (nextIndex + AudioCache.QUEUE_DEPTH - 1).coerceAtMost(player.mediaItemCount - 1)
-            (nextIndex..end).map { index -> player.getMediaItemAt(index).toSong() }
-        } else {
-            emptyList()
+        val count = AppSettings.songPreloadMode.value.songCount
+        if (!player.isPlaying || count == 0) {
+            cancelPrefetch()
+            return
         }
-        // So whatever read-ahead writes for these can be named in the Cached
-        // songs folder; its own requests carry nothing but an id.
+        val timeline = player.currentTimeline
+        val upcomingItems = preloadQueueIndices(
+            currentIndex = player.currentMediaItemIndex,
+            itemCount = player.mediaItemCount,
+            songCount = count,
+            repeatOne = player.repeatMode == Player.REPEAT_MODE_ONE,
+        ) { index ->
+            timeline.getNextWindowIndex(index, player.repeatMode, player.shuffleModeEnabled)
+        }.map { player.getMediaItemAt(it) }
+            .filter { it.mediaId != player.currentMediaItem?.mediaId }
+        val upcomingSongs = upcomingItems.map { it.toSong() }
+        // Make prefetched audio identifiable in the Cached songs folder.
         AudioCache.noteSongs(upcomingSongs)
         val preferAudio = AppSettings.preferMusicOnly.value
-        val request = preferAudio to upcomingSongs.map { it.videoId }
+        val request = preferAudio to upcomingItems.map { "${it.mediaId}|${it.localConfiguration?.uri}" }
         if (request == preferredPrefetchRequest) return
         preferredPrefetchRequest = request
         preferredPrefetchJob?.cancel()
 
         fun warm(songs: List<Song>) {
             AudioCache.prefetchQueue(
-                songs.map { song ->
-                    // The title, artist and runtime the item was built with —
-                    // see [Song.toMediaItem]. Read from the queued item because
-                    // read-ahead has no other way to reach this metadata.
-                    AudioCache.Upcoming(
-                        mediaId = song.videoId,
-                        target = TrackMatcher.targetOf(song),
-                    )
+                songs.mapIndexedNotNull { index, song ->
+                    val item = if (song.videoId == upcomingSongs[index].videoId) {
+                        upcomingItems[index]
+                    } else {
+                        song.toMediaItem()
+                    }
+                    item.localConfiguration?.uri?.let { uri ->
+                        AudioCache.Upcoming(mediaId = song.videoId, uri = uri)
+                    }
                 },
             )
         }
 
-        val next = upcomingSongs.firstOrNull()
-        if (!preferAudio || next?.isVideo != true) {
+        if (!preferAudio || upcomingSongs.none { it.isVideo }) {
             preferredPrefetchJob = null
             warm(upcomingSongs)
             return
@@ -6037,17 +6058,17 @@ class PlaybackService : MediaLibraryService() {
         // unchanged result is the fallback and is warmed on the same path.
         AudioCache.cancel()
         preferredPrefetchJob = scope.launch {
-            val preferred = runCatching { YtMusicRepository.resolveAudio(next) }
-                .onFailure {
-                    TrackLog.d(
-                        "BitChord",
-                        "music-only queue warm-up fell back to video: ${it.message}",
-                        about = next.videoId,
-                    )
+            val preferred = upcomingSongs.map { song ->
+                if (!song.isVideo) song else {
+                    val resolved = runCatching { YtMusicRepository.resolveAudio(song) }.getOrDefault(song)
+                    // resolveAudio may absorb cancellation in its own Result.
+                    kotlin.coroutines.coroutineContext.ensureActive()
+                    resolved
                 }
-                .getOrDefault(next)
+            }
             if (preferredPrefetchRequest != request) return@launch
-            warm(listOf(preferred) + upcomingSongs.drop(1))
+            AudioCache.noteSongs(preferred)
+            warm(preferred)
         }
     }
 
@@ -6655,6 +6676,12 @@ class PlaybackService : MediaLibraryService() {
             // Re-evaluate the already queued next track immediately when this
             // preference changes, instead of waiting for another timeline event.
             AppSettings.preferMusicOnly.drop(1).collect {
+                cancelPrefetch()
+                player?.takeIf { it.isPlaying }?.let(::prefetchAround)
+            }
+        }
+        scope.launch {
+            AppSettings.songPreloadMode.drop(1).collect {
                 cancelPrefetch()
                 player?.takeIf { it.isPlaying }?.let(::prefetchAround)
             }
