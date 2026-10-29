@@ -1649,7 +1649,6 @@ fun SettingsScreen(
                 selected = songPreloadMode,
                 onSelect = {
                     AppSettings.setSongPreloadMode(it)
-                    pickingSongPreload = false
                 },
             )
         }
@@ -2315,7 +2314,9 @@ private fun SongPreloadMode.localizedLabel(): String = stringResource(
 
 @Composable
 private fun SongPreloadSheet(selected: SongPreloadMode, onSelect: (SongPreloadMode) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+    val savedDelay by AppSettings.songPreloadDelaySeconds.collectAsStateWithLifecycle()
+    var delaySeconds by remember(savedDelay) { mutableStateOf(savedDelay.toFloat()) }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         Text(
             text = stringResource(R.string.song_preload_title),
             style = MaterialTheme.typography.titleLarge,
@@ -2338,6 +2339,33 @@ private fun SongPreloadSheet(selected: SongPreloadMode, onSelect: (SongPreloadMo
                 if (mode == selected) {
                     Icon(Icons.Rounded.Check, contentDescription = stringResource(R.string.selected), tint = MaterialTheme.colorScheme.primary)
                 }
+            }
+        }
+        HorizontalDivider(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
+        Column(Modifier.padding(horizontal = 22.dp)) {
+            Text(stringResource(R.string.song_preload_delay_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(if (selected == SongPreloadMode.AFTER_CURRENT) R.string.song_preload_delay_disabled else R.string.song_preload_delay_detail),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+            )
+            Text(
+                if (delaySeconds.toInt() == 0) stringResource(R.string.song_preload_instant)
+                else stringResource(R.string.song_preload_seconds, delaySeconds.toInt()),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Slider(
+                value = delaySeconds,
+                onValueChange = { delaySeconds = it },
+                onValueChangeFinished = { AppSettings.setSongPreloadDelaySeconds(kotlin.math.round(delaySeconds).toInt()) },
+                valueRange = 0f..30f, steps = 29,
+                enabled = selected != SongPreloadMode.AFTER_CURRENT,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(stringResource(R.string.song_preload_instant), style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.song_preload_seconds, 30), style = MaterialTheme.typography.labelMedium)
             }
         }
     }

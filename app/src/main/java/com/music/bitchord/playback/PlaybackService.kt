@@ -6681,7 +6681,10 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         scope.launch {
-            AppSettings.songPreloadMode.drop(1).collect {
+            kotlinx.coroutines.flow.combine(
+                AppSettings.songPreloadMode,
+                AppSettings.songPreloadDelaySeconds,
+            ) { mode, seconds -> mode to seconds }.drop(1).collect {
                 cancelPrefetch()
                 player?.takeIf { it.isPlaying }?.let(::prefetchAround)
             }

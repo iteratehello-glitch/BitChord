@@ -39,6 +39,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.TextButton
+import com.music.bitchord.data.model.HomeLayout
+import com.music.bitchord.data.model.homeSpeedDial
+import com.music.bitchord.data.model.isHomeRecents
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -142,7 +155,15 @@ fun HomeScreen(
     leadHero: Boolean = true,
     currentSong: Song? = null,
     isPlaying: Boolean = false,
+    homeLayout: HomeLayout? = null,
+    onCustomizeHome: (() -> Unit)? = null,
+    hasMore: Boolean = true,
+    controlSurface: @Composable (Modifier) -> Modifier = { it },
 ) {
+    var recentsSelected by rememberSaveable { mutableStateOf(false) }
+    val recentsListState = rememberLazyListState()
+    val personalized = homeLayout != null
+    val activeListState = if (personalized && recentsSelected) recentsListState else listState
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
 
     PullToRefresh(
@@ -152,7 +173,7 @@ fun HomeScreen(
         modifier = modifier,
     ) {
         LazyColumn(
-            state = listState,
+            state = activeListState,
             modifier = Modifier.fillMaxSize(),
             // The heading sits higher than the other tabs' first row: pull the
             // whole feed up by [HOME_TITLE_LIFT] with it.
@@ -166,11 +187,33 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item { HomeTitle(title) }
+                item(key = "home_heading") {
+                    if (personalized) Text(
+                        text = title,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp).semantics { heading() },
+                    ) else HomeTitle(title)
+                }
             }
             if (!signedIn && onSignIn != null) {
                 item {
                     SignInBanner(onSignIn = onSignIn, modifier = Modifier.padding(bottom = 8.dp))
+                }
+            }
+            if (personalized) item(key = "home_tabs") {
+                Row(
+                    controlSurface(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp))
+                        .selectableGroup().padding(4.dp),
+                ) {
+                    listOf(false to Res.string.shelf_for_you, true to Res.string.shelf_recents).forEach { (recent, label) ->
+                        Box(
+                            Modifier.clip(CircleShape)
+                                .background(if (recentsSelected == recent) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.Transparent)
+                                .selectable(selected = recentsSelected == recent, onClick = { recentsSelected = recent }, role = Role.Tab)
+                                .padding(horizontal = 22.dp, vertical = 12.dp),
+                        ) { Text(stringResource(label), style = MaterialTheme.typography.labelLarge) }
+                    }
                 }
             }
             when (state) {
@@ -189,37 +232,87 @@ fun HomeScreen(
                     MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                 }
                 is UiState.Success -> {
-                    if (recentlyPlayedLoading) {
-                        recentlyPlayedSkeleton(listLayout = recentsViewType == LibraryViewType.LIST)
-                    }
-                    // The loading skeleton already owns the hero slot. Until
-                    // Recently Played lands, every real shelf must retain its
-                    // compact-card layout instead of briefly becoming a hero.
-                    itemsIndexedShelves(
-                        shelves = state.data,
-                        onItemClick = onItemClick,
-                        onItemLongPress = onItemLongPress,
-                        currentSong = currentSong,
-                        isPlaying = isPlaying,
-                        firstIsHero = leadHero && !recentlyPlayedLoading,
-                        recentsViewType = recentsViewType,
-                        onRecentsViewTypeToggle = {
-                            AppUi.host.setHomeRecentsViewType(
-                                if (recentsViewType == LibraryViewType.LIST) {
-                                    LibraryViewType.GRID
-                                } else {
-                                    LibraryViewType.LIST
-                                },
+                    if (homeLayout != null) {
+                        if (recentsSelected) {
+                            val recents = state.data.filter { it.isHomeRecents() }
+                            if (recentlyPlayedLoading) recentlyPlayedSkeleton(listLayout = recentsViewType == LibraryViewType.LIST)
+                            if (recents.all { it.items.isEmpty() } && !recentlyPlayedLoading) item(key = "recents_empty") {
+                                MessageState(stringResource(Res.string.home_recents_empty))
+                            }
+                            itemsIndexedShelves(
+                                shelves = recents, onItemClick = onItemClick, onItemLongPress = onItemLongPress,
+                                currentSong = currentSong, isPlaying = isPlaying, firstIsHero = false,
+                                recentsViewType = recentsViewType,
+                                onRecentsViewTypeToggle = { AppUi.host.setHomeRecentsViewType(if (recentsViewType == LibraryViewType.LIST) LibraryViewType.GRID else LibraryViewType.LIST) },
                             )
-                        },
-                    )
-                    if (loadingMore) feedMoreSkeleton()
+                        } else {
+                            val layout = homeLayout.normalized()
+                            val dial = homeSpeedDial(state.data, layout.columns * layout.rows)
+                            if (layout.showSpeedDial && dial.isNotEmpty()) item(key = "home_speed_dial") {
+                                HomeSpeedDial(
+                                    items = dial, columns = layout.columns, onItemClick = onItemClick,
+                                    onItemLongPress = onItemLongPress, currentSong = currentSong, isPlaying = isPlaying,
+                                    controlSurface = controlSurface,
+                                )
+                            }
+                            itemsIndexedShelves(
+                                shelves = layout.shelves(state.data), onItemClick = onItemClick,
+                                onItemLongPress = onItemLongPress, currentSong = currentSong, isPlaying = isPlaying,
+                                firstIsHero = false, recentsViewType = recentsViewType, onRecentsViewTypeToggle = {},
+                            )
+                            if (loadingMore) feedMoreSkeleton()
+                            else if (hasMore && onLoadMore != null) item(key = "home_more") {
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    TextButton(onClick = onLoadMore) { Text(stringResource(Res.string.home_more_recommendations)) }
+                                }
+                            }
+                        }
+                    } else {
+                        if (recentlyPlayedLoading) {
+                            recentlyPlayedSkeleton(listLayout = recentsViewType == LibraryViewType.LIST)
+                        }
+                        // The loading skeleton already owns the hero slot. Until
+                        // Recently Played lands, every real shelf must retain its
+                        // compact-card layout instead of briefly becoming a hero.
+                        itemsIndexedShelves(
+                            shelves = state.data,
+                            onItemClick = onItemClick,
+                            onItemLongPress = onItemLongPress,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
+                            firstIsHero = leadHero && !recentlyPlayedLoading,
+                            recentsViewType = recentsViewType,
+                            onRecentsViewTypeToggle = {
+                                AppUi.host.setHomeRecentsViewType(
+                                    if (recentsViewType == LibraryViewType.LIST) {
+                                        LibraryViewType.GRID
+                                    } else {
+                                        LibraryViewType.LIST
+                                    },
+                                )
+                            },
+                        )
+                        if (loadingMore) feedMoreSkeleton()
+
+                    }
+                }
+            }
+            if (personalized && onCustomizeHome != null) item(key = "home_customize") {
+                Row(
+                    modifier = controlSurface(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 20.dp).fillMaxWidth())
+                        .clickable(role = Role.Button, onClick = onCustomizeHome).padding(horizontal = 20.dp, vertical = 18.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(Res.string.home_customize), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
     }
 
-    if (onLoadMore != null && state is UiState.Success) {
+    if (!personalized && onLoadMore != null && state is UiState.Success) {
         val loadMore by rememberUpdatedState(onLoadMore)
         // Re-checked on every layout change, rather than on the rising edge of
         // "the tail is in view". A page that appends only a shelf or two leaves

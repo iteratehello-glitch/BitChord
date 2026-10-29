@@ -146,16 +146,6 @@ object AudioCache {
      */
     private const val RENDITION_KEYS_TTL_MS = 5_000L
 
-    /**
-     * Grace period before reading ahead. The seconds just after a track starts
-     * are when the player is filling its own buffer and the listener is waiting
-     * on sound; read-ahead competing for bandwidth there would trade the gap
-     * between songs for a gap at the start of one. It also collapses a burst of
-     * skips into a single fetch of wherever the listener lands, and leaves the
-     * player's opening burst holding the cache entry alone.
-     */
-    private const val PREFETCH_DELAY_MS = 8_000L
-
     private lateinit var cache: SimpleCache
 
     private lateinit var appContext: Context
@@ -1148,7 +1138,7 @@ object AudioCache {
         if (selected.isEmpty()) return
         job = scope.launch {
             // Let the current song fill its initial playback buffer first.
-            delay(PREFETCH_DELAY_MS)
+            delay(AppSettings.songPreloadDelaySeconds.value.coerceIn(0, 30) * 1_000L)
             for (track in selected) {
                 coroutineContext.ensureActive()
                 try {

@@ -1229,4 +1229,22 @@
     <string name="wear_os_code_hint">Pairing code</string>
     <string name="wear_os_done">Done</string>
     <string name="signed_by">Signed by %1$s</string>
+    <string name="home_customize">Customize home</string>
+    <string name="home_customize_description">Make room for the music you reach for most. Changes are saved automatically.</string>
+    <string name="home_speed_dial">Speed Dial</string>
+    <string name="home_speed_dial_detail">Recent songs, with recommendations to fill the grid.</string>
+    <string name="home_grid_columns">Columns</string>
+    <string name="home_grid_rows">Rows</string>
+    <string name="home_sections">Song sections</string>
+    <string name="home_sections_detail">Use the arrows to reorder sections, or hide the ones you do not need.</string>
+    <string name="home_reset">Reset home layout</string>
+    <string name="home_move_up">Move %1$s up</string>
+    <string name="home_move_down">Move %1$s down</string>
+    <string name="home_show_section">Show %1$s</string>
+    <string name="home_grid_number">%1$d</string>
+    <string name="song_preload_delay_title">Start loading after</string>
+    <string name="song_preload_delay_detail">Wait after playback starts or resumes before loading upcoming songs. Default: 7 seconds.</string>
+    <string name="song_preload_delay_disabled">Choose 1 or 3 songs above to enable advance loading. Your delay will be remembered.</string>
+    <string name="song_preload_instant">Instantly</string>
+    <string name="song_preload_seconds">%1$d seconds</string>
 </resources>

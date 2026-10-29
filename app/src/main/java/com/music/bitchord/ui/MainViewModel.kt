@@ -120,7 +120,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * [loadHome] synchronously up to its first suspension point — a property
      * declared after [init] would still be null when that runs.
      */
+    private val _homeHasMore = MutableStateFlow(false)
+    val homeHasMore: StateFlow<Boolean> = _homeHasMore.asStateFlow()
     private var homeContinuation: String? = null
+        set(value) { field = value; _homeHasMore.value = value != null }
 
     /** Titles already on screen, so a later page can't repeat a shelf. */
     private val homeSeenTitles = mutableSetOf<String>()

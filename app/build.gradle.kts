@@ -115,8 +115,10 @@ android {
     productFlavors {
         create("dev") {
             dimension = "env"
-            applicationId = "com.dev.bitchord"
-            resValue("string", "app_name", "BitChord Dev")
+            // Preview builds install alongside earlier CI APKs, whose signing key is unavailable.
+            val homePreview = providers.gradleProperty("homePreview").orNull == "true"
+            applicationId = if (homePreview) "com.dev.bitchord.home" else "com.dev.bitchord"
+            resValue("string", "app_name", if (homePreview) "BitChord Home" else "BitChord Dev")
         }
         create("prod") {
             dimension = "env"

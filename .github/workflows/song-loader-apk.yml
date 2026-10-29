@@ -1,8 +1,8 @@
-name: Build Song Loader APK
+name: Build Home Customization APK
 
 on:
   push:
-    branches: [build/song-loader-apk]
+    branches: [feature/home-customization]
   workflow_dispatch:
 
 permissions:
@@ -28,20 +28,31 @@ jobs:
           if [ ! -d "$ANDROID_HOME/platforms/android-37" ]; then
             ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi
-      - name: Test preload policy
-        run: ./gradlew :app:testDevDebugUnitTest --tests 'com.music.bitchord.PreloadPolicyTest' --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
+      - name: Restore preview signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: bitchord-home-preview-signing-v1
+      - name: Create preview signing key if needed
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          fi
+      - name: Test home and preload policies
+        run: ./gradlew :app:testDevDebugUnitTest --tests 'com.music.bitchord.PreloadPolicyTest' --tests 'com.music.bitchord.HomeLayoutTest' -PhomePreview=true --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
       - name: Build installable development APK
-        run: ./gradlew :app:assembleDevDebug --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
+        run: ./gradlew :app:assembleDevDebug -PhomePreview=true --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: BitChord-song-loader-APK
+          name: BitChord-Home-APK
           path: app/build/outputs/apk/dev/debug/*universal*.apk
           if-no-files-found: error
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: song-loader-test-reports
+          name: home-test-reports
           path: app/build/reports/tests/testDevDebugUnitTest/
           if-no-files-found: ignore

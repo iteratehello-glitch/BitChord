@@ -311,6 +311,8 @@ import com.music.bitchord.data.LocalGroups
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.ui.screens.HomeScreen
+import com.music.bitchord.ui.screens.HomeCustomizationSheet
+import com.music.bitchord.ui.components.lightweightLiquidGlass
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
@@ -721,6 +723,17 @@ private fun BitChordApp(
     )
 
     val homeState by viewModel.home.collectAsStateWithLifecycle()
+    val homeLayout by AppSettings.homeLayout.collectAsStateWithLifecycle()
+    val homeHasMore by viewModel.homeHasMore.collectAsStateWithLifecycle()
+    var customizingHome by rememberSaveable { mutableStateOf(false) }
+    if (customizingHome) {
+        HomeCustomizationSheet(
+            layout = homeLayout,
+            shelves = (homeState as? UiState.Success)?.data.orEmpty(),
+            onChange = AppSettings::setHomeLayout,
+            onDismiss = { customizingHome = false },
+        )
+    }
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -3056,7 +3069,16 @@ private fun BitChordApp(
                                 listState = homeListState,
                                 currentSong = player.song,
                                 isPlaying = player.isPlaying,
-                                title = stringResource(R.string.listen_now),
+                                title = stringResource(R.string.home),
+                                homeLayout = homeLayout,
+                                hasMore = homeHasMore,
+                                onCustomizeHome = { customizingHome = true },
+                                controlSurface = { modifier ->
+                                    modifier.lightweightLiquidGlass(
+                                        shape = androidx.compose.foundation.shape.CircleShape,
+                                        fallbackColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    )
+                                },
                                 signedIn = signedIn,
                                 onSignIn = { webSession = WebSessionMode.SIGN_IN },
                                 onItemClick = { item, shelfTitle ->

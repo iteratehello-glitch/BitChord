@@ -221,6 +221,8 @@ object AppSettings {
 
     val crossfadeSeconds = MutableStateFlow(0)
     val songPreloadMode = MutableStateFlow(SongPreloadMode.ONE)
+    val songPreloadDelaySeconds = MutableStateFlow(7)
+    val homeLayout = MutableStateFlow(com.music.bitchord.data.model.HomeLayout())
 
     /**
      * Lets Automix's analyzer decide the transition's timing and length
@@ -819,6 +821,19 @@ object AppSettings {
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
         songPreloadMode.value = SongPreloadMode.fromStoredName(prefs.getString(KEY_SONG_PRELOAD, null))
+        songPreloadDelaySeconds.value = prefs.getInt(KEY_SONG_PRELOAD_DELAY, 7).coerceIn(0, 30)
+        homeLayout.value = runCatching {
+            val json = org.json.JSONObject(prefs.getString(KEY_HOME_LAYOUT, "{}") ?: "{}")
+            fun strings(key: String): List<String> {
+                val array = json.optJSONArray(key) ?: return emptyList()
+                return (0 until array.length()).map { array.getString(it) }
+            }
+            com.music.bitchord.data.model.HomeLayout(
+                showSpeedDial = json.optBoolean("speedDial", true),
+                columns = json.optInt("columns", 3), rows = json.optInt("rows", 2),
+                shelfOrder = strings("order"), hiddenShelves = strings("hidden").toSet(),
+            ).normalized()
+        }.getOrDefault(com.music.bitchord.data.model.HomeLayout())
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -1111,6 +1126,25 @@ object AppSettings {
     fun setCrossfadeSeconds(value: Int) {
         crossfadeSeconds.value = value
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
+    }
+
+    fun setSongPreloadDelaySeconds(value: Int) {
+        val seconds = value.coerceIn(0, 30)
+        songPreloadDelaySeconds.value = seconds
+        prefs.edit().putInt(KEY_SONG_PRELOAD_DELAY, seconds).apply()
+    }
+
+    fun setHomeLayout(value: com.music.bitchord.data.model.HomeLayout) {
+        val layout = value.normalized()
+        homeLayout.value = layout
+        val json = org.json.JSONObject().apply {
+            put("speedDial", layout.showSpeedDial)
+            put("columns", layout.columns)
+            put("rows", layout.rows)
+            put("order", org.json.JSONArray(layout.shelfOrder))
+            put("hidden", org.json.JSONArray(layout.hiddenShelves.toList()))
+        }
+        prefs.edit().putString(KEY_HOME_LAYOUT, json.toString()).apply()
     }
 
     fun setSongPreloadMode(value: SongPreloadMode) {
@@ -2002,6 +2036,8 @@ object AppSettings {
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
     private const val KEY_SONG_PRELOAD = "song_preload_mode"
+    private const val KEY_SONG_PRELOAD_DELAY = "song_preload_delay_seconds"
+    private const val KEY_HOME_LAYOUT = "home_layout_v1"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"
