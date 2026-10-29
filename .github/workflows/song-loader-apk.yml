@@ -23,7 +23,11 @@ jobs:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android build tools
-        run: sdkmanager 'platforms;android-37' 'build-tools;36.0.0' 'cmake;3.22.1'
+        run: |
+          sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0' 'cmake;3.22.1'
+          if [ ! -d "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
       - name: Test preload policy
         run: ./gradlew :app:testDevDebugUnitTest --tests 'com.music.bitchord.PreloadPolicyTest' --no-daemon --max-workers=2 -Dorg.gradle.parallel=false '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8'
       - name: Build installable development APK
